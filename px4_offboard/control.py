@@ -58,8 +58,8 @@ from pyudev import Context
 def find_serial_port():
     context = Context()
     for device in context.list_devices(subsystem='tty'):
-        if 'ID_VENDOR_ID' in device.properties and device.properties['ID_VENDOR_ID'] == '1234':
-            if 'ID_MODEL_ID' in device.properties and device.properties['ID_MODEL_ID'] == '5678':
+        if 'ID_VENDOR_ID' in device.properties and device.properties['ID_VENDOR_ID'] == '1a86':
+            if 'ID_MODEL_ID' in device.properties and device.properties['ID_MODEL_ID'] == '7523':
                 return device.device_node
 
 serial_port = find_serial_port()
