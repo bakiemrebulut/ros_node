@@ -63,7 +63,7 @@ def find_serial_port():
                 return device.device_node
 
 serial_port = find_serial_port()
-while serial_port:
+while not serial_port:
     serial_port = find_serial_port()
 
 ser = serial.Serial(serial_port, baudrate=9600)
