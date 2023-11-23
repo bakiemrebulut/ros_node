@@ -53,21 +53,6 @@ from geometry_msgs.msg import Twist, Vector3
 from math import pi
 from std_msgs.msg import Bool
 
-from pyudev import Context
-
-def find_serial_port():
-    context = Context()
-    for device in context.list_devices(subsystem='tty'):
-        if 'ID_VENDOR_ID' in device.properties and device.properties['ID_VENDOR_ID'] == '1a86':
-            if 'ID_MODEL_ID' in device.properties and device.properties['ID_MODEL_ID'] == '7523':
-                return device.device_node
-
-serial_port = find_serial_port()
-while not serial_port:
-    serial_port = find_serial_port()
-
-ser = serial.Serial(serial_port, baudrate=9600)
-
 
 
 class kmsenseControl(Node):
@@ -100,19 +85,18 @@ class kmsenseControl(Node):
             self.local_position_callback,
             qos_profile)
         
-        """self.velctl_sub = self.create_subscription(
+        self.velctl_sub = self.create_subscription(
             Twist,
             '/kmsense_feedback',
-            self.velctl_callback,qos_profile)"""
+            self.velctl_callback,qos_profile)
 
 
-        self.ser = serial.Serial(serial_port, baudrate=9600)
-
+        self.ser = serial.Serial ("/dev/ttyUSB4", 9600)
         self.ser.read_until(b'\n').decode('utf-8')
         #Create publishers
         self.publisher_position = self.create_publisher(Twist, '/kmsense_velocity_cmd', qos_profile)
         
-        timer1_period = 1.0  # seconds
+        timer1_period = 3.0  # seconds
         self.timer = self.create_timer(timer1_period, self.send_speed_callback)
         
         timer2_period = 0.02  # seconds
@@ -123,8 +107,7 @@ class kmsenseControl(Node):
         #self.yaw_bias=0.0
         #self.trueYaw=0.0
         self.groundspeed=0.0
-        self.ser = serial.Serial(serial_port, baudrate=9600)
-
+        self.ser = serial.Serial('/dev/ttyUSB4')
         #received_data = self.ser.read_until(b'\n').decode('utf-8') ## if speed is low, one of them will be delete
         #received_data = self.ser.read_until(b'\n').decode('utf-8')
         self.set_sensor('H')
@@ -135,7 +118,7 @@ class kmsenseControl(Node):
         self.send_speed=1.0
     def set_sensor(self,parameter):                                      # Send to Sensor & Log function
         #f = open(file_name , 'a')
-        self.ser = serial.Serial(serial_port, baudrate=9600)                  #Open port with baud rate | Sensor Port
+        self.ser = serial.Serial ("/dev/ttyUSB4", 9600)                  #Open port with baud rate | Sensor Port
         self.ser.write((parameter+"*/").encode())                      # P:pos Z:angle C:angular.velocity
         #self.get_logger().info(f"####################################Written to Sensor: {parameter}")
         self.ser.read_until(b'\n').decode('utf-8')
@@ -165,16 +148,17 @@ class kmsenseControl(Node):
     def local_position_callback(self, msg):
         self.groundspeed=np.sqrt(msg.vx * msg.vx + msg.vy * msg.vy)
     
-    """def velctl_callback(self, msg):
-        self.send_speed = msg.angular.z"""
+    def velctl_callback(self, msg):
+        self.send_speed = msg.angular.z
     
     #publishes offboard control modes and velocity as trajectory setpoints
     def send_speed_callback(self):
         #self.get_logger().info(f"SPEED: {self.groundspeed}")
-        self.set_sensor("A"+str(float("{:.1f}".format(self.groundspeed))))
+        if self.send_speed>0:
+            self.set_sensor("A"+str(float("{:.1f}".format(self.groundspeed))))
 
     def offboard_position_callback(self):
-        self.ser = serial.Serial(serial_port, baudrate=9600)
+        self.ser = serial.Serial('/dev/ttyUSB4')
         received_data = self.ser.read_until(b'\n').decode('utf-8') ## if speed is low, one of them will be delete
         received_data = self.ser.read_until(b'\n').decode('utf-8')
         #print(float(received_data.split("|")[0]))

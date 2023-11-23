@@ -127,7 +127,7 @@ class OffboardControl(Node):
         #self.publisher_trajectory = self.create_publisher(TrajectorySetpoint, '/fmu/in/trajectory_setpoint',qos_profile)#, qos_profile)
         self.publisher_rates = self.create_publisher(VehicleRatesSetpoint, '/fmu/in/vehicle_rates_setpoint',qos_profile)#, qos_profile)
         self.vehicle_command_publisher_ = self.create_publisher(VehicleCommand, "/fmu/in/vehicle_command", 10)
-        """self.kmsense_speed_publisher = self.create_publisher(Twist, "/kmsense_feedback", qos_profile)"""
+        self.kmsense_speed_publisher = self.create_publisher(Twist, "/kmsense_feedback", qos_profile)
 
         
         #creates callback function for the arm timer
@@ -143,8 +143,8 @@ class OffboardControl(Node):
         #self.nav_state = VehicleStatus.NAVIGATION_STATE_MAX
         self.arm_state = VehicleStatus.ARMING_STATE_INIT
         self.distance = 0.0
-        self.th_rate = -0.85    #-0.75 -0.648
-        self.hover_thrust=0.85  #0.75  0.648
+        self.th_rate = -0.56    #-0.75 -0.648
+        self.hover_thrust=0.56  #0.75  0.648
         self.timestamp=0
         self.sticks_moving = False
         self.yaw_diff = 0.0  #yaw value we send as command
@@ -193,7 +193,7 @@ class OffboardControl(Node):
         self.timestamp=msg.timestamp
 
     def rc_callback(self,msg):
-        self.jamming_sim_switch	=True if msg.values[7]>1500 else False
+        self.jamming_sim_switch	=True if msg.values[4]>1500 else False
         """if(self.jamming_sim_switch):
             self.get_logger().info(f"jamming on")
         else:
@@ -308,7 +308,7 @@ class OffboardControl(Node):
             rates_message.thrust_body	[2] = self.th_rate
         #rates_message.reset_integral    = self.reset_rate_integral
         self.publisher_rates.publish(rates_message)
-    """def speed_publisher(self,send_speed):
+    def speed_publisher(self,send_speed):
         twist = Twist()
         twist.linear.x = 0.0 # used for transfer distance # n_val ## NED
         twist.linear.y = 0.0# e_val ## NED
@@ -316,7 +316,7 @@ class OffboardControl(Node):
         twist.angular.x = 0.0
         twist.angular.y = 0.0
         twist.angular.z = float(send_speed)
-        self.kmsense_speed_publisher.publish(twist)"""
+        self.kmsense_speed_publisher.publish(twist)
     
     def cmdloop_callback(self):
         if (self.last_offboard_mode != self.offboard_mode and self.last_offboard_mode!=-1 ):
@@ -353,11 +353,11 @@ class OffboardControl(Node):
                 self.publish_rate_message(0.0,-self.true_pitch)
                 self.get_logger().info("Taking Off")
                 self.last_altitude=self.altitude
-                #self.speed_publisher(1.0)
+                self.speed_publisher(1.0)
                 return 0
 
             if(abs(self.yaw_diff)>10):
-                #self.speed_publisher(0.0)
+                self.speed_publisher(0.0)
                 if self.last_altitude>(self.altitude): #drone climbing
                     self.counter_land = 0
                     self.counter_eq=0
@@ -387,7 +387,7 @@ class OffboardControl(Node):
                 self.last_altitude=self.altitude
                 return 0
             
-            #self.speed_publisher(1.0)
+            self.speed_publisher(1.0)
             if self.last_altitude>(self.altitude): #drone climbing
                 self.counter_land = 0
                 self.counter_eq=0
