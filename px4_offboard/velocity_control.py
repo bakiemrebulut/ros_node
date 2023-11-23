@@ -143,8 +143,8 @@ class OffboardControl(Node):
         #self.nav_state = VehicleStatus.NAVIGATION_STATE_MAX
         self.arm_state = VehicleStatus.ARMING_STATE_INIT
         self.distance = 0.0
-        self.th_rate = -0.85    #-0.75 -0.648
-        self.hover_thrust=0.85  #0.75  0.648
+        self.th_rate = -0.56    #-0.75 -0.648
+        self.hover_thrust=0.56  #0.75  0.648
         self.timestamp=0
         self.sticks_moving = False
         self.yaw_diff = 0.0  #yaw value we send as command
@@ -193,7 +193,7 @@ class OffboardControl(Node):
         self.timestamp=msg.timestamp
 
     def rc_callback(self,msg):
-        self.jamming_sim_switch	=True if msg.values[7]>1500 else False
+        self.jamming_sim_switch	=True if msg.values[4]>1500 else False
         """if(self.jamming_sim_switch):
             self.get_logger().info(f"jamming on")
         else:
