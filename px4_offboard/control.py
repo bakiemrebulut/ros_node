@@ -45,7 +45,7 @@ from rclpy.clock import Clock
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy
 
 from px4_msgs.msg import VehicleStatus
-from px4_msgs.msg import VehicleAttitude
+#from px4_msgs.msg import VehicleAttitude
 from px4_msgs.msg import VehicleLocalPosition
 
 
@@ -53,12 +53,8 @@ from geometry_msgs.msg import Twist, Vector3
 from math import pi
 from std_msgs.msg import Bool
 
-def truncate_float(float_number, decimal_places):
-    multiplier = 10 ** decimal_places
-    try:
-        return int(float_number * multiplier) / multiplier
-    except:
-        return 0
+
+
 class kmsenseControl(Node):
 
     def __init__(self):
@@ -73,22 +69,28 @@ class kmsenseControl(Node):
         #Create subscriptions
         self.status_sub = self.create_subscription(
             VehicleStatus,
-            '/fmu/vehicle_status/out',
+            '/fmu/out/vehicle_status',
             self.vehicle_status_callback,
             qos_profile)
 
-        self.attitude_sub = self.create_subscription(
+        """self.attitude_sub = self.create_subscription(
             VehicleAttitude,
-            '/fmu/vehicle_attitude/out',
+            '/fmu/out/vehicle_attitude',
             self.attitude_callback,
-            qos_profile)
+            qos_profile)"""
         
-        self.attitude_sub = self.create_subscription(
+        self.vlp_sub = self.create_subscription(
             VehicleLocalPosition,
-            '/fmu/vehicle_local_position/out',
+            '/fmu/out/vehicle_local_position',
             self.local_position_callback,
             qos_profile)
         
+        """self.velctl_sub = self.create_subscription(
+            Twist,
+            '/kmsense_feedback',
+            self.velctl_callback,qos_profile)"""
+
+
         self.ser = serial.Serial ("/dev/ttyUSB0", 9600)
         self.ser.read_until(b'\n').decode('utf-8')
         #Create publishers
@@ -99,18 +101,30 @@ class kmsenseControl(Node):
         
         timer2_period = 0.02  # seconds
         self.timer = self.create_timer(timer2_period, self.offboard_position_callback)
-        
+        self.counter=0
         self.arm_state = -1
         self.last_arming_state = -1
-        self.yaw_bias=0.0
-        self.trueYaw=0.0
+        #self.yaw_bias=0.0
+        #self.trueYaw=0.0
         self.groundspeed=0.0
+        self.ser = serial.Serial('/dev/ttyUSB0')
+        #received_data = self.ser.read_until(b'\n').decode('utf-8') ## if speed is low, one of them will be delete
+        #received_data = self.ser.read_until(b'\n').decode('utf-8')
+        self.set_sensor('H')
+        received_data = self.ser.read_until(b'\n').decode('utf-8') ## if speed is low, one of them will be delete
+        received_data = self.ser.read_until(b'\n').decode('utf-8')
+        self.get_logger().info(str(received_data.split("|")[0]))
+        #self.set_sensor('Z')
+        self.send_speed=1.0
     def set_sensor(self,parameter):                                      # Send to Sensor & Log function
+        #f = open(file_name , 'a')
         self.ser = serial.Serial ("/dev/ttyUSB0", 9600)                  #Open port with baud rate | Sensor Port
         self.ser.write((parameter+"*/").encode())                      # P:pos Z:angle C:angular.velocity
-        self.get_logger().info(f"####################################Written to Sensor: {parameter}")
+        #self.get_logger().info(f"####################################Written to Sensor: {parameter}")
         self.ser.read_until(b'\n').decode('utf-8')
-
+        #stamped_data = str(datetime.now())+"|"
+        #stamped_data += parameter+"*/"
+        #f.write(stamped_data+"\n")
         #print("Written to Sensor: ",(parameter+"\r\n").encode())    # 
                                                                     #receives and sets vehicle status values 
     def vehicle_status_callback(self, msg):
@@ -118,34 +132,35 @@ class kmsenseControl(Node):
         #self.get_logger().info(f"ARM STATUS: {msg.arming_state}")
         # self.get_logger().info(f"FlightCheck: {msg.pre_flight_checks_pass}")
         if (self.last_arming_state != msg.arming_state and self.last_arming_state!=-1 ):
-            self.set_sensor('Z')
-            self.yaw_bias=(self.trueYaw*180/np.pi+360)%360
-            # set_sensor('C')
+            #self.yaw_bias=(self.trueYaw*180/np.pi+360)%360
             self.set_sensor('P')
+            
         self.last_arming_state=msg.arming_state
         
 
-    def attitude_callback(self, msg):
+    """def attitude_callback(self, msg):
         orientation_q = msg.q
 
         #trueYaw is the drones current yaw value
         self.trueYaw = -(np.arctan2(2.0*(orientation_q[3]*orientation_q[0] + orientation_q[1]*orientation_q[2]), 
-                                  1.0 - 2.0*(orientation_q[0]*orientation_q[0] + orientation_q[1]*orientation_q[1])))
+                                  1.0 - 2.0*(orientation_q[0]*orientation_q[0] + orientation_q[1]*orientation_q[1])))"""
     
     def local_position_callback(self, msg):
         self.groundspeed=np.sqrt(msg.vx * msg.vx + msg.vy * msg.vy)
-
+    
+    """def velctl_callback(self, msg):
+        self.send_speed = msg.angular.z"""
     
     #publishes offboard control modes and velocity as trajectory setpoints
     def send_speed_callback(self):
-        """self.get_logger().info(f"SPEED: {self.groundspeed}")"""
-        self.set_sensor("A"+str(float("{:.2f}".format(self.groundspeed))))
+        #self.get_logger().info(f"SPEED: {self.groundspeed}")
+        self.set_sensor("A"+str(float("{:.1f}".format(self.groundspeed))))
 
     def offboard_position_callback(self):
         self.ser = serial.Serial('/dev/ttyUSB0')
         received_data = self.ser.read_until(b'\n').decode('utf-8') ## if speed is low, one of them will be delete
         received_data = self.ser.read_until(b'\n').decode('utf-8')
-        #print(float(received_data.split("|")[4]),float(received_data.split("|")[5]))
+        #print(float(received_data.split("|")[0]))
         twist = Twist()
 
 
@@ -153,52 +168,54 @@ class kmsenseControl(Node):
         if(len(received_data.split("|"))==9):
             sensor_x=float(received_data.split("|")[4])
             sensor_y=float(received_data.split("|")[5])
-            sensor_yaw=float(received_data.split("|")[8]) # 180 is -x
-            fc_yaw_local=  (180 + sensor_yaw)%360
-            dest_yaw=((180 - np.arctan2(sensor_y,sensor_x)*180/np.pi + 360)%360)
-            
-            sensor_n=np.cos((self.yaw_bias+fc_yaw_local)*np.pi/180)*np.sqrt(sensor_x*sensor_x+sensor_y*sensor_y)
-            sensor_e=np.sin((self.yaw_bias+fc_yaw_local)*np.pi/180)*np.sqrt(sensor_x*sensor_x+sensor_y*sensor_y)
-            
-            # values are equalizated 0 - 1 
-            if(abs(sensor_n)>10.0):
-                n_val=-1*(sensor_n/max(abs(sensor_n),abs(sensor_e)))   
-            else:
-                n_val=0.0
-
-            if(abs(sensor_e)>10.0):
-                e_val=-1*(sensor_e/max(abs(sensor_n),abs(sensor_e)))    
-            else:
-                e_val=0.0
-            
-            yaw_speed_divider_coefficient=200
-
-            if(dest_yaw>fc_yaw_local):
-                if((dest_yaw-fc_yaw_local)>180):
-                    yaw_val=-1*(dest_yaw-fc_yaw_local)/200
+            sensor_yaw=float(received_data.split("|")[8]) # NED frame
+            fc_yaw_local=  (sensor_yaw)%360
+            if sensor_x>=0:
+                if sensor_y>=0:
+                    dest_yaw=((np.arctan2(sensor_x,sensor_y)*180/np.pi + 90)%360)
                 else:
-                    yaw_val=(dest_yaw-fc_yaw_local)/200
+                    dest_yaw=((np.arctan2(-sensor_y,sensor_x)*180/np.pi + 180)%360)
+                
             else:
-                if((fc_yaw_local-dest_yaw)>180):
-                    yaw_val=(fc_yaw_local-dest_yaw)/200
+                if sensor_y>=0:
+                    dest_yaw=((np.arctan2(sensor_y,-sensor_x)*180/np.pi )%360)
                 else:
-                    yaw_val=-1*(fc_yaw_local-dest_yaw)/200
-
+                    dest_yaw=((np.arctan2(-sensor_x,-sensor_y)*180/np.pi + 270)%360)
+            
+            set_yaw=0    
+            if (dest_yaw-fc_yaw_local)>0:
+                if (dest_yaw-fc_yaw_local)<180:
+                    set_yaw=dest_yaw-fc_yaw_local
+                else:
+                    set_yaw=(dest_yaw-fc_yaw_local)-360.0
+            else:
+                if abs(dest_yaw-fc_yaw_local)<180:
+                    set_yaw=dest_yaw-fc_yaw_local
+                else:
+                    set_yaw=(dest_yaw-fc_yaw_local)+360.0
+            
+            distance=np.sqrt(sensor_x*sensor_x+sensor_y*sensor_y)
             
 
+            self.get_logger().info(f"XYy: {sensor_x,sensor_y,set_yaw,dest_yaw,fc_yaw_local}")
 
-            
-
-            self.get_logger().info(f"XYZ_ZS_NEW_NS_ES_YS_GS: {sensor_x,sensor_y,truncate_float(sensor_n,2),truncate_float(sensor_e,2),sensor_yaw,truncate_float(n_val,2),truncate_float(e_val,2),truncate_float(yaw_val,2),truncate_float(self.groundspeed,2)}")
-
-            twist.linear.x = n_val ## NED
-            twist.linear.y = e_val ## NED
+            twist.linear.x = float(distance) # used for transfer distance # n_val ## NED
+            twist.linear.y = 0.0# e_val ## NED
             twist.linear.z = 0.0
             twist.angular.x = 0.0
             twist.angular.y = 0.0
-            twist.angular.z = float(yaw_val )
+            twist.angular.z = set_yaw
             self.publisher_position.publish(twist)
-
+            """if self.counter>10:
+                stamped_data = str(datetime.now())+"|"
+                stamped_data += received_data
+                stamped_data = stamped_data.replace('|', ',')
+                f = open(file_name, 'a')                                                # Log stamped data
+                f.write(str(stamped_data)+"\n")
+                self.counter=0
+            self.counter=self.counter+1"""
+        #else:
+            #self.get_logger().info(f"XYy:Reject")
 
 def main(args=None):
     rclpy.init(args=args)
@@ -212,4 +229,7 @@ def main(args=None):
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(e)
